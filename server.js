@@ -62,7 +62,7 @@ app.get("/healthz", (req, res) => {
 
 
 //keep server alive with cron job 
-const url = 'https://behavioral-five-brakes-wholesale.trycloudflare.com';
+const url = process.env.BACKEND_URL;
 cron.schedule('* * * * *', async () => {
   try {
     const res = await fetch(`${url}`);
