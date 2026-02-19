@@ -1,10 +1,20 @@
 import express from "express";
-import { getSaleByInvoice, getSalesReport } from "../controllers/report.controller.js";
+import {
+  getSalesReport,
+  getPurchasesReport,
+  getStockReport,
+} from "../controllers/report.controller.js";
+import userAuth from "../middleware/userAuth.js";
 
 const router = express.Router();
 
-router.get("/", getSalesReport);
-router.get("/invoice/:invoiceNumber", getSaleByInvoice);
+// ── Sales ─────────────────────────────────────────────────────────────────────
+router.post("/sales", userAuth, getSalesReport);
 
+// ── Purchases ─────────────────────────────────────────────────────────────────
+router.post("/purchases", userAuth, getPurchasesReport);
+
+// ── Stock ─────────────────────────────────────────────────────────────────────
+router.post("/stock", userAuth, getStockReport);
 
 export default router;

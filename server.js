@@ -55,8 +55,14 @@ app.get("/", (req, res) => {
 });
 
 
+//RENDER HEALTH CHECK
+app.get("/healthz", (req, res) => {
+  res.status(200).send("ok");
+});
+
+
 //keep server alive with cron job 
-const url = 'https://university-cosmetics-station-locally.trycloudflare.com';
+const url = 'https://behavioral-five-brakes-wholesale.trycloudflare.com';
 cron.schedule('* * * * *', async () => {
   try {
     const res = await fetch(`${url}`);
