@@ -1,10 +1,564 @@
+//import SaleModel from "../models/sale.model.js";
+//import userModel from "../models/userModel.js";
+//import mongoose from "mongoose";
+//import { Stock } from "../models/stock.model.js";
+//import { submitToFBR } from "../utils/fbr.service.js";
+
+
+//export const createSale = async (req, res) => {
+//  const session = await mongoose.startSession();
+//  session.startTransaction();
+
+//  try {
+//    const userId = req.userId;
+//    console.log("[INFO] Creating sale for userId:", userId);
+//    console.log("[INFO] Request body:", JSON.stringify(req.body, null, 2));
+
+//    const user = await userModel.findById(userId).session(session);
+//    if (!user) {
+//      await session.abortTransaction();
+//      session.endSession();
+//      console.warn("[WARN] User not found. Aborting transaction.");
+//      return res.status(404).json({ message: "User not found" });
+//    }
+
+//    const { products, totals, paymentDetails, branchId, ...saleData } = req.body;
+
+//    if (!products || !Array.isArray(products) || products.length === 0) {
+//      await session.abortTransaction();
+//      session.endSession();
+//      return res.status(400).json({ message: "Products array is required and cannot be empty" });
+//    }
+//    if (!totals) {
+//      await session.abortTransaction();
+//      session.endSession();
+//      return res.status(400).json({ message: "Totals object is required" });
+//    }
+//    if (!paymentDetails) {
+//      await session.abortTransaction();
+//      session.endSession();
+//      return res.status(400).json({ message: "Payment details are required" });
+//    }
+//    if (!branchId) {
+//      await session.abortTransaction();
+//      session.endSession();
+//      return res.status(400).json({ message: "Branch ID is required" });
+//    }
+
+//    const stockUpdateResults    = [];
+//    const insufficientStockItems = [];
+//    const enrichedProducts      = [];
+
+//    // ── Phase 1: Validate all products & check stock ─────────────────────────
+//    for (const product of products) {
+//      console.log(`[INFO] Validating product - HSCode: ${product.HSCode}, companyName: ${product.companyName}, item: ${product.item}, Qty: ${product.qty}`);
+
+//      if (!product.HSCode || !product.companyName || !product.item || !product.qty || product.qty <= 0) {
+//        await session.abortTransaction();
+//        session.endSession();
+//        console.warn("[WARN] Product missing required fields:", product);
+//        return res.status(400).json({
+//          message: "Each product must have HSCode, companyName, item, and positive qty",
+//          invalidProduct: product,
+//        });
+//      }
+
+//      // Find stock document by HSCode + companyName + branchId
+//      const stockDoc = await Stock.findOne({
+//        userId,
+//        HSCode:      String(product.HSCode),
+//        companyName: String(product.companyName),
+//        branchId,
+//      }).session(session);
+
+//      if (!stockDoc) {
+//        await session.abortTransaction();
+//        session.endSession();
+//        console.warn(`[WARN] Stock not found for HSCode: ${product.HSCode}, companyName: ${product.companyName}, branch: ${branchId}`);
+//        return res.status(404).json({
+//          message: `Stock not found for HSCode: ${product.HSCode}, companyName: ${product.companyName} in branch: ${branchId}`,
+//          product,
+//        });
+//      }
+
+//      // Find the specific item by itemDescription (product.item)
+//      const itemIndex = stockDoc.items.findIndex(
+//        (i) => i.itemDescription === String(product.item)
+//      );
+
+//      if (itemIndex === -1) {
+//        await session.abortTransaction();
+//        session.endSession();
+//        console.warn(`[WARN] Item "${product.item}" not found in stock for HSCode: ${product.HSCode}`);
+//        return res.status(404).json({
+//          message: `Item "${product.item}" not found in stock for HSCode: ${product.HSCode}, companyName: ${product.companyName}`,
+//          product,
+//        });
+//      }
+
+//      const stockItem = stockDoc.items[itemIndex];
+
+//      if (stockItem.quantity < product.qty) {
+//        insufficientStockItems.push({
+//          HSCode:          product.HSCode,
+//          companyName:     product.companyName,
+//          itemDescription: stockItem.itemDescription,
+//          available:       stockItem.quantity,
+//          requested:       product.qty,
+//          shortage:        product.qty - stockItem.quantity,
+//        });
+//        console.warn("[WARN] Insufficient stock:", {
+//          HSCode:      product.HSCode,
+//          companyName: product.companyName,
+//          item:        product.item,
+//          available:   stockItem.quantity,
+//          requested:   product.qty,
+//        });
+//      }
+
+//      enrichedProducts.push({
+//        ...product,
+//        itemDescription: stockItem.itemDescription,
+//        stockDocId:      stockDoc._id,
+//        itemIndex,
+//        currentQuantity: stockItem.quantity,
+//        minStockLevel:   stockItem.minStockLevel,
+//        fbr:             stockItem.fbr, 
+//      });
+//    }
+
+//    if (insufficientStockItems.length > 0) {
+//      await session.abortTransaction();
+//      session.endSession();
+//      console.warn("[WARN] Aborting — insufficient stock for some items");
+//      return res.status(400).json({
+//        message: "Insufficient stock for one or more items",
+//        insufficientStockItems,
+//      });
+//    }
+
+//    // ── Phase 2: Deduct stock ────────────────────────────────────────────────
+//    for (const product of enrichedProducts) {
+//      console.log(`[INFO] Deducting ${product.qty} from "${product.itemDescription}" (HSCode: ${product.HSCode}, companyName: ${product.companyName})`);
+
+//      // Match on itemDescription inside the items array
+//      const updateResult = await Stock.findOneAndUpdate(
+//        {
+//          _id: product.stockDocId,
+//          "items.itemDescription": product.itemDescription,
+//        },
+//        {
+//          $inc: { "items.$.quantity": -product.qty },
+//        },
+//        { new: true, session }
+//      );
+
+//      if (!updateResult) {
+//        await session.abortTransaction();
+//        session.endSession();
+//        console.error(`[ERROR] Failed to deduct stock for "${product.itemDescription}" (HSCode: ${product.HSCode})`);
+//        return res.status(500).json({
+//          message: `Failed to update stock for item: ${product.itemDescription}`,
+//          product,
+//        });
+//      }
+
+//      const updatedItem = updateResult.items.find(
+//        (i) => i.itemDescription === product.itemDescription
+//      );
+
+//      stockUpdateResults.push({
+//        HSCode:           product.HSCode,
+//        companyName:      product.companyName,
+//        itemDescription:  product.itemDescription,
+//        previousQuantity: product.currentQuantity,
+//        newQuantity:      updatedItem.quantity,
+//        deducted:         product.qty,
+//        belowMinStock:    updatedItem.quantity < updatedItem.minStockLevel,
+//      });
+
+//      console.log("[INFO] Stock updated:", {
+//        itemDescription: product.itemDescription,
+//        newQuantity:     updatedItem.quantity,
+//      });
+//    }
+
+//    // ── Phase 3: Create sale record ──────────────────────────────────────────
+//    const saleProducts = enrichedProducts.map((p) => ({
+//      HSCode:          p.HSCode,
+//      companyName:     p.companyName,
+//      itemDescription: p.itemDescription,
+//      location:        p.location,
+//      rate:            p.rate,
+//      qty:             p.qty,
+//      amount:          p.amount,
+//      gstRate:         p.gstRate  || 0,
+//      gstAmount:       p.gstAmount || 0,
+//      discount:        p.discount  || 0,
+//      netAmount:       p.netAmount,
+//      fbr: p.fbr
+//    }));
+
+//    const preparedPaymentDetails = {
+//      totalNetAmount:  paymentDetails.totalNetAmount,
+//      amountReceived:  paymentDetails.amountReceived,
+//      remainingAmount: paymentDetails.remainingAmount,
+//      changeAmount:    paymentDetails.changeAmount || 0,
+//      paymentStatus:   paymentDetails.paymentStatus || "Pending",
+//    };
+
+//    const sale = new SaleModel({
+//      userId,
+//      branchId,
+//      ...saleData,
+//      products: saleProducts,
+//      totals,
+//      paymentDetails: preparedPaymentDetails,
+//    });
+
+//    const savedSale = await sale.save({ session });
+
+//    await session.commitTransaction();
+//    session.endSession();
+//    console.log("[SUCCESS] Sale created successfully:", savedSale._id);
+
+//    const lowStockWarnings = stockUpdateResults.filter((i) => i.belowMinStock);
+
+//    if (user.productionApiStatus && user.productionToken) {
+//      submitToFBR(savedSale, user).catch(err =>
+//      console.error('[FBR] Submission failed:', err.message)
+//  );
+//}
+
+//    return res.status(201).json({
+//      success: true,
+//      message: "Sale created successfully",
+//      data:    savedSale,
+//      stockUpdates: stockUpdateResults,
+//      lowStockWarnings: lowStockWarnings.length > 0
+//        ? { count: lowStockWarnings.length, items: lowStockWarnings }
+//        : undefined,
+//    });
+
+//  } catch (error) {
+//    await session.abortTransaction();
+//    session.endSession();
+//    console.error("[FATAL] Error creating sale:", error);
+
+//    if (error.code === 11000) {
+//      return res.status(409).json({ message: "Duplicate invoice number detected", error: error.message });
+//    }
+
+//    return res.status(500).json({ message: "Failed to create sale", error: error.message });
+//  }
+//};
+
+///**
+// * Get all sales for the authenticated user
+// */
+//export const getAllSales = async (req, res) => {
+//  try {
+//    const userId = req.userId;
+    
+//    if (!userId) {
+//      return res.status(401).json({ message: "User not authenticated" });
+//    }
+
+//    console.log("[DEBUG] Fetching sales for userId:", userId);
+
+//    const sales = await SaleModel.find({ userId })
+//      .sort({ createdAt: -1 })
+//      .lean();
+    
+//    console.log(`[DEBUG] Found ${sales.length} sales for user`);
+
+//    res.status(200).json({
+//      success: true,
+//      count: sales.length,
+//      data: sales
+//    });
+
+//  } catch (error) {
+//    console.error("[ERROR] Failed to retrieve sales:", error);
+//    res.status(500).json({ 
+//      message: "Failed to retrieve sales.", 
+//      error: error.message 
+//    });
+//  }
+//};
+
+
+///**
+// * Get sale by ID
+// */
+//export const getSaleById = async (req, res) => {
+//  try {
+//    const userId = req.userId;
+//    const saleId = req.params.id;
+
+//    // Ensure user can only access their own sales
+//    const sale = await SaleModel.findOne({
+//      _id: saleId,
+//      userId: userId
+//    }).lean();
+
+//    if (!sale) {
+//      return res.status(404).json({ message: "Sale not found." });
+//    }
+
+//    res.status(200).json({
+//      success: true,
+//      data: sale
+//    });
+
+//  } catch (error) {
+//    console.error("[ERROR] Failed to retrieve sale:", error);
+//    res.status(500).json({ 
+//      message: "Failed to retrieve sale.", 
+//      error: error.message 
+//    });
+//  }
+//};
+
+///**
+// * Update sale (limited fields only - stock already deducted)
+// */
+//export const updateSale = async (req, res) => {
+//  try {
+//    const userId = req.userId;
+//    const saleId = req.params.id;
+
+//    // Prevent updates to critical fields
+//    const restrictedFields = ['products', 'totals', 'invoiceNumber', 'userId', 'branchId'];
+//    const hasRestrictedField = restrictedFields.some(field => req.body[field] !== undefined);
+
+//    if (hasRestrictedField) {
+//      return res.status(400).json({ 
+//        message: "Cannot update products, totals, invoice number, user, or branch after sale creation" 
+//      });
+//    }
+
+//    // Filter out undefined and null values
+//    const updateData = Object.fromEntries(
+//      Object.entries(req.body).filter(([_, v]) => v !== undefined && v !== null)
+//    );
+
+//    const updatedSale = await SaleModel.findOneAndUpdate(
+//      { _id: saleId, userId: userId },
+//      updateData,
+//      {
+//        new: true,
+//        runValidators: true,
+//      }
+//    );
+
+//    if (!updatedSale) {
+//      return res.status(404).json({ message: "Sale not found." });
+//    }
+
+//    res.status(200).json({
+//      success: true,
+//      message: "Sale updated successfully",
+//      data: updatedSale
+//    });
+
+//  } catch (error) {
+//    console.error("[ERROR] Failed to update sale:", error);
+//    res.status(400).json({ 
+//      message: "Failed to update sale.", 
+//      error: error.message 
+//    });
+//  }
+//};
+
+///**
+// * Delete sale (soft delete - mark as cancelled and restore stock)
+// */
+//export const deleteSale = async (req, res) => {
+//  const session = await mongoose.startSession();
+//  session.startTransaction();
+
+//  try {
+//    const userId = req.userId;
+//    const saleId = req.params.id;
+
+//    const sale = await SaleModel.findOne({
+//      _id: saleId,
+//      userId
+//    }).session(session);
+
+//    if (!sale) {
+//      await session.abortTransaction();
+//      return res.status(404).json({ message: "Sale not found." });
+//    }
+
+//    // Restore stock
+//    const stockRestoreResults = [];
+
+//    for (const product of sale.products) {
+//      const updateResult = await Stock.findOneAndUpdate(
+//        {
+//          userId,
+//          HSCode: String(product.HSCode),
+//          branchId: sale.branchId,
+//          "items.location": product.location
+//        },
+//        {
+//          $inc: { "items.$.quantity": product.qty }
+//        },
+//        {
+//          new: true,
+//          session
+//        }
+//      );
+
+//      if (updateResult) {
+//        const restoredItem = updateResult.items.find(
+//          i => i.location === product.location
+//        );
+
+//        stockRestoreResults.push({
+//          HSCode: product.HSCode,
+//          location: product.location,
+//          restoredQuantity: product.qty,
+//          newQuantity: restoredItem?.quantity ?? null
+//        });
+//      }
+//    }
+
+//    // HARD DELETE
+//    await SaleModel.deleteOne({
+//      _id: saleId,
+//      userId
+//    }).session(session);
+
+//    await session.commitTransaction();
+
+//    res.status(200).json({
+//      success: true,
+//      message: "Sale deleted permanently and stock restored.",
+//      stockRestored: stockRestoreResults
+//    });
+
+//  } catch (error) {
+//    await session.abortTransaction();
+//    res.status(500).json({
+//      message: "Failed to delete sale.",
+//      error: error.message
+//    });
+//  } finally {
+//    session.endSession();
+//  }
+//};
+
+
+///**
+// * Get sales by branch
+// */
+//export const getSalesByBranch = async (req, res) => {
+//  try {
+//    const userId = req.userId;
+//    const { branchId } = req.params;
+
+//    if (!branchId) {
+//      return res.status(400).json({ message: "Branch ID is required" });
+//    }
+
+//    const sales = await SaleModel.find({ 
+//      userId, 
+//      branchId 
+//    })
+//    .sort({ createdAt: -1 })
+//    .lean();
+
+//    res.status(200).json({
+//      success: true,
+//      count: sales.length,
+//      data: sales
+//    });
+
+//  } catch (error) {
+//    console.error("[ERROR] Failed to retrieve sales by branch:", error);
+//    res.status(500).json({ 
+//      message: "Failed to retrieve sales by branch.", 
+//      error: error.message 
+//    });
+//  }
+//};
+
+///**
+// * Get sales summary/statistics
+// */
+//export const getSalesSummary = async (req, res) => {
+//  try {
+//    const userId = req.userId;
+//    const { startDate, endDate, branchId } = req.query;
+
+//    const query = { userId };
+
+//    // Add date range filter if provided
+//    if (startDate || endDate) {
+//      query.saleDate = {};
+//      if (startDate) query.saleDate.$gte = new Date(startDate);
+//      if (endDate) query.saleDate.$lte = new Date(endDate);
+//    }
+
+//    // Add branch filter if provided
+//    if (branchId) {
+//      query.branchId = branchId;
+//    }
+
+//    const sales = await SaleModel.find(query).lean();
+
+//    const summary = {
+//      totalSales: sales.length,
+//      totalRevenue: sales.reduce((sum, sale) => sum + (sale.totals?.totalNetAmount || 0), 0),
+//      totalItemsSold: sales.reduce((sum, sale) => sum + (sale.totals?.totalQuantity || 0), 0),
+//      confirmedSales: sales.filter(s => s.saleStatus === 'confirm').length,
+//      pendingSales: sales.filter(s => s.saleStatus === 'pending').length,
+//      cancelledSales: sales.filter(s => s.saleStatus === 'cancelled').length,
+//      fullyPaidSales: sales.filter(s => s.paymentDetails?.paymentStatus === 'Fully Paid').length,
+//      partiallyPaidSales: sales.filter(s => s.paymentDetails?.paymentStatus === 'Partially Paid').length,
+//      unpaidSales: sales.filter(s => s.paymentDetails?.paymentStatus === 'Unpaid').length,
+//      salesByMethod: {
+//        cash: sales.filter(s => s.saleMethod === 'cash').length,
+//        credit: sales.filter(s => s.saleMethod === 'credit').length,
+//        card: sales.filter(s => s.saleMethod === 'card').length
+//      },
+//      salesByType: {
+//        retail: sales.filter(s => s.saleType === 'retail').length,
+//        wholesale: sales.filter(s => s.saleType === 'wholesale').length,
+//        bulk: sales.filter(s => s.saleType === 'bulk').length
+//      }
+//    };
+
+//    res.status(200).json({
+//      success: true,
+//      data: summary
+//    });
+
+//  } catch (error) {
+//    console.error("[ERROR] Failed to retrieve sales summary:", error);
+//    res.status(500).json({ 
+//      message: "Failed to retrieve sales summary.", 
+//      error: error.message 
+//    });
+//  }
+//};
+
+
+
+
+//new ver
 
 
 import SaleModel from "../models/sale.model.js";
 import userModel from "../models/userModel.js";
 import mongoose from "mongoose";
 import { Stock } from "../models/stock.model.js";
+import { submitToFBR } from "../utils/fbr.service.js";
 
+// ─── Create Sale ──────────────────────────────────────────────────────────────
 
 export const createSale = async (req, res) => {
   const session = await mongoose.startSession();
@@ -13,13 +567,11 @@ export const createSale = async (req, res) => {
   try {
     const userId = req.userId;
     console.log("[INFO] Creating sale for userId:", userId);
-    console.log("[INFO] Request body:", JSON.stringify(req.body, null, 2));
 
     const user = await userModel.findById(userId).session(session);
     if (!user) {
       await session.abortTransaction();
       session.endSession();
-      console.warn("[WARN] User not found. Aborting transaction.");
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -46,25 +598,21 @@ export const createSale = async (req, res) => {
       return res.status(400).json({ message: "Branch ID is required" });
     }
 
-    const stockUpdateResults    = [];
+    const stockUpdateResults     = [];
     const insufficientStockItems = [];
-    const enrichedProducts      = [];
+    const enrichedProducts       = [];
 
-    // ── Phase 1: Validate all products & check stock ─────────────────────────
+    // ── Phase 1: Validate all products & check stock ──────────────────────
     for (const product of products) {
-      console.log(`[INFO] Validating product - HSCode: ${product.HSCode}, companyName: ${product.companyName}, item: ${product.item}, Qty: ${product.qty}`);
-
       if (!product.HSCode || !product.companyName || !product.item || !product.qty || product.qty <= 0) {
         await session.abortTransaction();
         session.endSession();
-        console.warn("[WARN] Product missing required fields:", product);
         return res.status(400).json({
-          message: "Each product must have HSCode, companyName, item, and positive qty",
+          message:        "Each product must have HSCode, companyName, item, and positive qty",
           invalidProduct: product,
         });
       }
 
-      // Find stock document by HSCode + companyName + branchId
       const stockDoc = await Stock.findOne({
         userId,
         HSCode:      String(product.HSCode),
@@ -75,14 +623,12 @@ export const createSale = async (req, res) => {
       if (!stockDoc) {
         await session.abortTransaction();
         session.endSession();
-        console.warn(`[WARN] Stock not found for HSCode: ${product.HSCode}, companyName: ${product.companyName}, branch: ${branchId}`);
         return res.status(404).json({
           message: `Stock not found for HSCode: ${product.HSCode}, companyName: ${product.companyName} in branch: ${branchId}`,
           product,
         });
       }
 
-      // Find the specific item by itemDescription (product.item)
       const itemIndex = stockDoc.items.findIndex(
         (i) => i.itemDescription === String(product.item)
       );
@@ -90,7 +636,6 @@ export const createSale = async (req, res) => {
       if (itemIndex === -1) {
         await session.abortTransaction();
         session.endSession();
-        console.warn(`[WARN] Item "${product.item}" not found in stock for HSCode: ${product.HSCode}`);
         return res.status(404).json({
           message: `Item "${product.item}" not found in stock for HSCode: ${product.HSCode}, companyName: ${product.companyName}`,
           product,
@@ -108,13 +653,6 @@ export const createSale = async (req, res) => {
           requested:       product.qty,
           shortage:        product.qty - stockItem.quantity,
         });
-        console.warn("[WARN] Insufficient stock:", {
-          HSCode:      product.HSCode,
-          companyName: product.companyName,
-          item:        product.item,
-          available:   stockItem.quantity,
-          requested:   product.qty,
-        });
       }
 
       enrichedProducts.push({
@@ -124,39 +662,33 @@ export const createSale = async (req, res) => {
         itemIndex,
         currentQuantity: stockItem.quantity,
         minStockLevel:   stockItem.minStockLevel,
+        fbr:             stockItem.fbr,
       });
     }
 
     if (insufficientStockItems.length > 0) {
       await session.abortTransaction();
       session.endSession();
-      console.warn("[WARN] Aborting — insufficient stock for some items");
       return res.status(400).json({
         message: "Insufficient stock for one or more items",
         insufficientStockItems,
       });
     }
 
-    // ── Phase 2: Deduct stock ────────────────────────────────────────────────
+    // ── Phase 2: Deduct stock ──────────────────────────────────────────────
     for (const product of enrichedProducts) {
-      console.log(`[INFO] Deducting ${product.qty} from "${product.itemDescription}" (HSCode: ${product.HSCode}, companyName: ${product.companyName})`);
-
-      // Match on itemDescription inside the items array
       const updateResult = await Stock.findOneAndUpdate(
         {
-          _id: product.stockDocId,
+          _id:                     product.stockDocId,
           "items.itemDescription": product.itemDescription,
         },
-        {
-          $inc: { "items.$.quantity": -product.qty },
-        },
+        { $inc: { "items.$.quantity": -product.qty } },
         { new: true, session }
       );
 
       if (!updateResult) {
         await session.abortTransaction();
         session.endSession();
-        console.error(`[ERROR] Failed to deduct stock for "${product.itemDescription}" (HSCode: ${product.HSCode})`);
         return res.status(500).json({
           message: `Failed to update stock for item: ${product.itemDescription}`,
           product,
@@ -176,14 +708,9 @@ export const createSale = async (req, res) => {
         deducted:         product.qty,
         belowMinStock:    updatedItem.quantity < updatedItem.minStockLevel,
       });
-
-      console.log("[INFO] Stock updated:", {
-        itemDescription: product.itemDescription,
-        newQuantity:     updatedItem.quantity,
-      });
     }
 
-    // ── Phase 3: Create sale record ──────────────────────────────────────────
+    // ── Phase 3: Build sale products array ────────────────────────────────
     const saleProducts = enrichedProducts.map((p) => ({
       HSCode:          p.HSCode,
       companyName:     p.companyName,
@@ -192,10 +719,11 @@ export const createSale = async (req, res) => {
       rate:            p.rate,
       qty:             p.qty,
       amount:          p.amount,
-      gstRate:         p.gstRate  || 0,
+      gstRate:         p.gstRate   || 0,
       gstAmount:       p.gstAmount || 0,
       discount:        p.discount  || 0,
       netAmount:       p.netAmount,
+      fbr:             p.fbr,
     }));
 
     const preparedPaymentDetails = {
@@ -206,11 +734,12 @@ export const createSale = async (req, res) => {
       paymentStatus:   paymentDetails.paymentStatus || "Pending",
     };
 
+    // ── Phase 4: Save sale ────────────────────────────────────────────────
     const sale = new SaleModel({
       userId,
       branchId,
       ...saleData,
-      products: saleProducts,
+      products:       saleProducts,
       totals,
       paymentDetails: preparedPaymentDetails,
     });
@@ -219,7 +748,15 @@ export const createSale = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-    console.log("[SUCCESS] Sale created successfully:", savedSale._id);
+    console.log("[SUCCESS] Sale created:", savedSale._id);
+
+    // ── Phase 5: Async FBR submission (non-blocking) ──────────────────────
+    // submitToFBR handles QR generation + Cloudinary upload internally
+    if (user.productionApiStatus && user.productionToken) {
+      submitToFBR(savedSale, user).catch((err) =>
+        console.error("[FBR] Submission failed:", err.message)
+      );
+    }
 
     const lowStockWarnings = stockUpdateResults.filter((i) => i.belowMinStock);
 
@@ -246,127 +783,92 @@ export const createSale = async (req, res) => {
   }
 };
 
-/**
- * Get all sales for the authenticated user
- */
+// ─── Get All Sales ────────────────────────────────────────────────────────────
+// Returns all FBR fields including fbrQrUrl and fbrQrCdnUrl so the
+// frontend can render the QR image directly via <img src={sale.fbrQrCdnUrl} />
+
 export const getAllSales = async (req, res) => {
   try {
     const userId = req.userId;
-    
+
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated" });
     }
 
-    console.log("[DEBUG] Fetching sales for userId:", userId);
-
     const sales = await SaleModel.find({ userId })
       .sort({ createdAt: -1 })
       .lean();
-    
-    console.log(`[DEBUG] Found ${sales.length} sales for user`);
 
     res.status(200).json({
       success: true,
-      count: sales.length,
-      data: sales
+      count:   sales.length,
+      data:    sales,  // fbrQrUrl + fbrQrCdnUrl are included automatically via .lean()
     });
 
   } catch (error) {
     console.error("[ERROR] Failed to retrieve sales:", error);
-    res.status(500).json({ 
-      message: "Failed to retrieve sales.", 
-      error: error.message 
-    });
+    res.status(500).json({ message: "Failed to retrieve sales.", error: error.message });
   }
 };
 
+// ─── Get Sale by ID ───────────────────────────────────────────────────────────
 
-/**
- * Get sale by ID
- */
 export const getSaleById = async (req, res) => {
   try {
-    const userId = req.userId;
-    const saleId = req.params.id;
-
-    // Ensure user can only access their own sales
     const sale = await SaleModel.findOne({
-      _id: saleId,
-      userId: userId
+      _id:    req.params.id,
+      userId: req.userId,
     }).lean();
 
     if (!sale) {
       return res.status(404).json({ message: "Sale not found." });
     }
 
-    res.status(200).json({
-      success: true,
-      data: sale
-    });
+    res.status(200).json({ success: true, data: sale });
 
   } catch (error) {
     console.error("[ERROR] Failed to retrieve sale:", error);
-    res.status(500).json({ 
-      message: "Failed to retrieve sale.", 
-      error: error.message 
-    });
+    res.status(500).json({ message: "Failed to retrieve sale.", error: error.message });
   }
 };
 
-/**
- * Update sale (limited fields only - stock already deducted)
- */
+// ─── Update Sale ──────────────────────────────────────────────────────────────
+
 export const updateSale = async (req, res) => {
   try {
-    const userId = req.userId;
-    const saleId = req.params.id;
-
-    // Prevent updates to critical fields
     const restrictedFields = ['products', 'totals', 'invoiceNumber', 'userId', 'branchId'];
-    const hasRestrictedField = restrictedFields.some(field => req.body[field] !== undefined);
+    const hasRestrictedField = restrictedFields.some((f) => req.body[f] !== undefined);
 
     if (hasRestrictedField) {
-      return res.status(400).json({ 
-        message: "Cannot update products, totals, invoice number, user, or branch after sale creation" 
+      return res.status(400).json({
+        message: "Cannot update products, totals, invoice number, user, or branch after sale creation",
       });
     }
 
-    // Filter out undefined and null values
     const updateData = Object.fromEntries(
       Object.entries(req.body).filter(([_, v]) => v !== undefined && v !== null)
     );
 
     const updatedSale = await SaleModel.findOneAndUpdate(
-      { _id: saleId, userId: userId },
+      { _id: req.params.id, userId: req.userId },
       updateData,
-      {
-        new: true,
-        runValidators: true,
-      }
+      { new: true, runValidators: true }
     );
 
     if (!updatedSale) {
       return res.status(404).json({ message: "Sale not found." });
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Sale updated successfully",
-      data: updatedSale
-    });
+    res.status(200).json({ success: true, message: "Sale updated successfully", data: updatedSale });
 
   } catch (error) {
     console.error("[ERROR] Failed to update sale:", error);
-    res.status(400).json({ 
-      message: "Failed to update sale.", 
-      error: error.message 
-    });
+    res.status(400).json({ message: "Failed to update sale.", error: error.message });
   }
 };
 
-/**
- * Delete sale (soft delete - mark as cancelled and restore stock)
- */
+// ─── Delete Sale ──────────────────────────────────────────────────────────────
+
 export const deleteSale = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -375,166 +877,123 @@ export const deleteSale = async (req, res) => {
     const userId = req.userId;
     const saleId = req.params.id;
 
-    const sale = await SaleModel.findOne({
-      _id: saleId,
-      userId
-    }).session(session);
+    const sale = await SaleModel.findOne({ _id: saleId, userId }).session(session);
 
     if (!sale) {
       await session.abortTransaction();
       return res.status(404).json({ message: "Sale not found." });
     }
 
-    // Restore stock
     const stockRestoreResults = [];
 
     for (const product of sale.products) {
       const updateResult = await Stock.findOneAndUpdate(
         {
           userId,
-          HSCode: String(product.HSCode),
-          branchId: sale.branchId,
-          "items.location": product.location
+          HSCode:           String(product.HSCode),
+          branchId:         sale.branchId,
+          "items.location": product.location,
         },
-        {
-          $inc: { "items.$.quantity": product.qty }
-        },
-        {
-          new: true,
-          session
-        }
+        { $inc: { "items.$.quantity": product.qty } },
+        { new: true, session }
       );
 
       if (updateResult) {
-        const restoredItem = updateResult.items.find(
-          i => i.location === product.location
-        );
-
+        const restoredItem = updateResult.items.find((i) => i.location === product.location);
         stockRestoreResults.push({
-          HSCode: product.HSCode,
-          location: product.location,
+          HSCode:          product.HSCode,
+          location:        product.location,
           restoredQuantity: product.qty,
-          newQuantity: restoredItem?.quantity ?? null
+          newQuantity:     restoredItem?.quantity ?? null,
         });
       }
     }
 
-    // HARD DELETE
-    await SaleModel.deleteOne({
-      _id: saleId,
-      userId
-    }).session(session);
-
+    await SaleModel.deleteOne({ _id: saleId, userId }).session(session);
     await session.commitTransaction();
 
     res.status(200).json({
-      success: true,
-      message: "Sale deleted permanently and stock restored.",
-      stockRestored: stockRestoreResults
+      success:       true,
+      message:       "Sale deleted permanently and stock restored.",
+      stockRestored: stockRestoreResults,
     });
 
   } catch (error) {
     await session.abortTransaction();
-    res.status(500).json({
-      message: "Failed to delete sale.",
-      error: error.message
-    });
+    res.status(500).json({ message: "Failed to delete sale.", error: error.message });
   } finally {
     session.endSession();
   }
 };
 
+// ─── Get Sales by Branch ──────────────────────────────────────────────────────
 
-/**
- * Get sales by branch
- */
 export const getSalesByBranch = async (req, res) => {
   try {
-    const userId = req.userId;
     const { branchId } = req.params;
-
     if (!branchId) {
       return res.status(400).json({ message: "Branch ID is required" });
     }
 
-    const sales = await SaleModel.find({ 
-      userId, 
-      branchId 
-    })
-    .sort({ createdAt: -1 })
-    .lean();
+    const sales = await SaleModel.find({ userId: req.userId, branchId })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    res.status(200).json({
-      success: true,
-      count: sales.length,
-      data: sales
-    });
+    res.status(200).json({ success: true, count: sales.length, data: sales });
 
   } catch (error) {
     console.error("[ERROR] Failed to retrieve sales by branch:", error);
-    res.status(500).json({ 
-      message: "Failed to retrieve sales by branch.", 
-      error: error.message 
-    });
+    res.status(500).json({ message: "Failed to retrieve sales by branch.", error: error.message });
   }
 };
 
-/**
- * Get sales summary/statistics
- */
+// ─── Sales Summary ────────────────────────────────────────────────────────────
+
 export const getSalesSummary = async (req, res) => {
   try {
     const userId = req.userId;
     const { startDate, endDate, branchId } = req.query;
 
     const query = { userId };
-
-    // Add date range filter if provided
     if (startDate || endDate) {
       query.saleDate = {};
       if (startDate) query.saleDate.$gte = new Date(startDate);
-      if (endDate) query.saleDate.$lte = new Date(endDate);
+      if (endDate)   query.saleDate.$lte = new Date(endDate);
     }
-
-    // Add branch filter if provided
-    if (branchId) {
-      query.branchId = branchId;
-    }
+    if (branchId) query.branchId = branchId;
 
     const sales = await SaleModel.find(query).lean();
 
-    const summary = {
-      totalSales: sales.length,
-      totalRevenue: sales.reduce((sum, sale) => sum + (sale.totals?.totalNetAmount || 0), 0),
-      totalItemsSold: sales.reduce((sum, sale) => sum + (sale.totals?.totalQuantity || 0), 0),
-      confirmedSales: sales.filter(s => s.saleStatus === 'confirm').length,
-      pendingSales: sales.filter(s => s.saleStatus === 'pending').length,
-      cancelledSales: sales.filter(s => s.saleStatus === 'cancelled').length,
-      fullyPaidSales: sales.filter(s => s.paymentDetails?.paymentStatus === 'Fully Paid').length,
-      partiallyPaidSales: sales.filter(s => s.paymentDetails?.paymentStatus === 'Partially Paid').length,
-      unpaidSales: sales.filter(s => s.paymentDetails?.paymentStatus === 'Unpaid').length,
-      salesByMethod: {
-        cash: sales.filter(s => s.saleMethod === 'cash').length,
-        credit: sales.filter(s => s.saleMethod === 'credit').length,
-        card: sales.filter(s => s.saleMethod === 'card').length
-      },
-      salesByType: {
-        retail: sales.filter(s => s.saleType === 'retail').length,
-        wholesale: sales.filter(s => s.saleType === 'wholesale').length,
-        bulk: sales.filter(s => s.saleType === 'bulk').length
-      }
-    };
-
     res.status(200).json({
       success: true,
-      data: summary
+      data: {
+        totalSales:          sales.length,
+        totalRevenue:        sales.reduce((sum, s) => sum + (s.totals?.totalNetAmount || 0), 0),
+        totalItemsSold:      sales.reduce((sum, s) => sum + (s.totals?.totalQuantity  || 0), 0),
+        confirmedSales:      sales.filter((s) => s.saleStatus === 'confirm').length,
+        pendingSales:        sales.filter((s) => s.saleStatus === 'pending').length,
+        cancelledSales:      sales.filter((s) => s.saleStatus === 'cancelled').length,
+        fullyPaidSales:      sales.filter((s) => s.paymentDetails?.paymentStatus === 'Fully Paid').length,
+        partiallyPaidSales:  sales.filter((s) => s.paymentDetails?.paymentStatus === 'Partially Paid').length,
+        unpaidSales:         sales.filter((s) => s.paymentDetails?.paymentStatus === 'Unpaid').length,
+        fbrSubmitted:        sales.filter((s) => s.fbrStatus === 'submitted').length,
+        fbrFailed:           sales.filter((s) => s.fbrStatus === 'failed').length,
+        fbrPending:          sales.filter((s) => s.fbrStatus === 'pending').length,
+        salesByMethod: {
+          cash:   sales.filter((s) => s.saleMethod === 'cash').length,
+          credit: sales.filter((s) => s.saleMethod === 'credit').length,
+          card:   sales.filter((s) => s.saleMethod === 'card').length,
+        },
+        salesByType: {
+          retail:    sales.filter((s) => s.saleType === 'retail').length,
+          wholesale: sales.filter((s) => s.saleType === 'wholesale').length,
+          bulk:      sales.filter((s) => s.saleType === 'bulk').length,
+        },
+      },
     });
 
   } catch (error) {
     console.error("[ERROR] Failed to retrieve sales summary:", error);
-    res.status(500).json({ 
-      message: "Failed to retrieve sales summary.", 
-      error: error.message 
-    });
+    res.status(500).json({ message: "Failed to retrieve sales summary.", error: error.message });
   }
 };

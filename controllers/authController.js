@@ -6,11 +6,11 @@ import transporter from "../config/nodemailer.js";
 
 export const userRegister = async (req, res) => {
   try {
-    const { companyName, email, address, password, contactNumber } = req.body;
+    const { companyName, email, address, password, contactNumber, businessType } = req.body;
     
 
     // Validate required fields
-    if (!companyName || !email || !address || !password || !contactNumber) {
+    if (!companyName || !email || !address || !password || !contactNumber || !businessType) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -40,6 +40,7 @@ export const userRegister = async (req, res) => {
       password: hashedPassword,
       contactNumber,
       companyProfile: companyProfileUrl,
+      businessType
     });
 
     await user.save();

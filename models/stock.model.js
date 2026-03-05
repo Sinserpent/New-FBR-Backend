@@ -111,6 +111,17 @@ const stockItemSchema = new mongoose.Schema(
       type: [purchaseDetailsSchema],
       default: [],
     },
+    fbr: {
+      uoM:                             { type: String, default: 'Numbers, pieces, units' },
+      fbrSaleType:                     { type: String },
+      sroScheduleNo:                   { type: String, default: '' },
+      sroItemSerialNo:                  { type: String, default: '' },
+      fixedNotifiedValueOrRetailPrice: { type: Number, default: 0 },
+      extraTax:                        { type: Number, default: 0 },
+      furtherTax:                      { type: Number, default: 0 },
+      fedPayable:                      { type: Number, default: 0 },
+      salesTaxWithheldAtSource:        { type: Number, default: 0 },
+}
   },
   { _id: false }
 );

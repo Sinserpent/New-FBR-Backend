@@ -3,9 +3,10 @@ import { Stock } from "../models/stock.model.js";
 
 export const createStock = async (req, res) => {
   const session = await mongoose.startSession();
+
   session.startTransaction();
   console.log("📦 [createStock] Transaction started");
-
+  console.log(req.body)
   try {
     const userId  = req.userId;
     const payload = req.body;
@@ -64,6 +65,7 @@ export const createStock = async (req, res) => {
         location:        item.location,
         quantity:        item.quantity ?? 0,
         minStockLevel:   item.minStockLevel ?? 0,
+        fbr:             item.fbr ?? {}
       });
     }
 
@@ -166,6 +168,7 @@ export const createStock = async (req, res) => {
             location:        item.location,
             quantity:        item.quantity,
             minStockLevel:   item.minStockLevel,
+            fbr:             item.fbr ?? {}
           })),
         });
 
@@ -255,7 +258,8 @@ export const getUserStock = async (req, res) => {
           quantity: item.quantity,
           minStockLevel: item.minStockLevel,
           createdAt: stockRecord.createdAt,
-          updatedAt: stockRecord.updatedAt
+          updatedAt: stockRecord.updatedAt,
+          fbr: item.fbr
         });
       });
     });

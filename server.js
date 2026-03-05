@@ -7,13 +7,16 @@ import saleRoutes from "./routes/sale.routes.js";
 import salesReport from "./routes/report.routes.js";
 import purchaseRoutes from "./routes/purchase.routes.js"
 import stockRoutes from "./routes/stock.routes.js"
+import branchRouter from "./routes/branch.routes.js"
 
 import authRouter from "./routes/authRoutes.js";
 import userRouter from "./routes/userRoutes.js";
 import morgan from "morgan";
 import cron from "node-cron";
 
-import branchRouter from "./routes/branch.routes.js"
+
+//MOST IMP INSHALLAH WILL WORK
+import fbrRouter from './routes/fbr-route.js';
 
 // Connect to MongoDB
 connectDB();
@@ -49,6 +52,8 @@ app.use("/api/branch", branchRouter)
 app.use("/api/purchase", purchaseRoutes)
 app.use("/api/stock", stockRoutes)
 
+
+app.use('/fbr', fbrRouter);
 // Base route
 app.get("/", (req, res) => {
   res.send("I am alive");
@@ -62,7 +67,7 @@ app.get("/healthz", (req, res) => {
 
 
 //keep server alive with cron job 
-const url = process.env.BACKEND_URL;
+const url = 'https://ensures-allowed-prospect-stomach.trycloudflare.com';
 cron.schedule('* * * * *', async () => {
   try {
     const res = await fetch(`${url}`);
