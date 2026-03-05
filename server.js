@@ -23,7 +23,7 @@ connectDB();
 const app = express();
 const allowedOrigins = [
   process.env.CLIENT_URL,
-  process.enc.FBR_CLIENT_URL
+  process.env.FBR_CLIENT_URL
 ];
 app.use(cors({
   origin: (origin, callback) => {
