@@ -7,6 +7,7 @@ import {
   deleteSale
 } from "../controllers/sale.controller.js";
 import userAuth from "../middleware/userAuth.js";
+import { bulkSubmitToFBR } from "../controllers/Fbrbulksubmit.controller.js";
 
 const router = express.Router();
 
@@ -16,5 +17,6 @@ router.get("/getSaleById:id", getSaleById);
 router.put("/update/:id", userAuth,updateSale);
 router.delete("/delete/:id", userAuth, deleteSale);
 
+router.post("/fbr/submit-bulk", userAuth, bulkSubmitToFBR);
 
 export default router;

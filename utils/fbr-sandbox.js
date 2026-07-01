@@ -39,13 +39,13 @@ async function fbrFetch(endpoint, token, body) {
   let responseBody;
   const contentType = response.headers.get('content-type') ?? '';
 
-  try {
-    responseBody = contentType.includes('application/json')
-      ? await response.json()
-      : await response.text();
-  } catch {
-    responseBody = '<could not parse response body>';
-  }
+try {
+  const text = await response.text();
+  console.log(`[FBR RAW] status=${response.status} body=${text}`);
+  responseBody = text ? JSON.parse(text.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']')) : null;
+} catch {
+  responseBody = '<could not parse response body>';
+}
 
   if (!response.ok) {
     throw new FbrError(

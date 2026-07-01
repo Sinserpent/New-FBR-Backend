@@ -65,7 +65,7 @@ export const createStock = async (req, res) => {
         location:        item.location,
         quantity:        item.quantity ?? 0,
         minStockLevel:   item.minStockLevel ?? 0,
-        fbr:             item.fbr ?? {}
+        //fbr:             item.fbr ?? {}
       });
     }
 
@@ -168,7 +168,7 @@ export const createStock = async (req, res) => {
             location:        item.location,
             quantity:        item.quantity,
             minStockLevel:   item.minStockLevel,
-            fbr:             item.fbr ?? {}
+            //fbr:             item.fbr ?? {}
           })),
         });
 
@@ -259,7 +259,7 @@ export const getUserStock = async (req, res) => {
           minStockLevel: item.minStockLevel,
           createdAt: stockRecord.createdAt,
           updatedAt: stockRecord.updatedAt,
-          fbr: item.fbr
+          //fbr: item.fbr
         });
       });
     });

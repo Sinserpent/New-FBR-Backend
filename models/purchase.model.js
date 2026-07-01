@@ -383,7 +383,7 @@ const purchaseSchema = new mongoose.Schema(
     },
     stockId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: false,
       ref: "Stock",
     },
     branchId: {
@@ -494,6 +494,10 @@ const purchaseSchema = new mongoose.Schema(
       type: String,
       enum: ["Fully Paid", "Partially Paid", "Unpaid"],
       default: "Fully Paid",
+    },
+    bulkPurchaseId: {
+    type: String,
+    default: null, // null = manually created purchase, set = bulk imported
     },
 
     // ── Primary item reference (which stock item this purchase belongs to) ────

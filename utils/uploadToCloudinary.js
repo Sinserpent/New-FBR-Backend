@@ -37,22 +37,25 @@ export const uploadToCloudinary = (file, folder = "company-logos") => {
     throw new Error("File buffer missing");
   }
 
+  const buffer = Buffer.isBuffer(file.buffer)
+    ? file.buffer
+    : Buffer.from(file.buffer);
+
   return new Promise((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream(
-        {
-          folder,
-          resource_type: "auto",
-        },
-        (err, result) => {
-          if (err) reject(err);
-          else resolve(result.secure_url);
-        }
-      )
-      .end(file.buffer);
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "auto",
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        resolve(result.secure_url);
+      }
+    );
+
+    stream.end(buffer);
   });
 };
-
 
 // Delete image from Cloudinary
 export const deleteFromCloudinary = async (imageUrl) => {
