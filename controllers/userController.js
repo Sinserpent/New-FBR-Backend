@@ -19,7 +19,9 @@ export const getUserData = async (req, res) => {
         address: user.address,
         contactNumber: user.contactNumber,
         email: user.email,
+        POSID: user.POSID,
         productionApiStatus: user.productionApiStatus,
+        posProductionStatus: !!(user.PosProductionToken && user.POSID),
         businessType: user.businessType,
         fbrApprovedScenarios: user.fbrApprovedScenarios,
         fbrSandboxPassedAt:   user.fbrSandboxPassedAt,
@@ -146,6 +148,67 @@ export const saveProductionToken = async (req, res) => {
 
   } catch (error) {
     console.error("Error saving production token:", {
+      message: error.message,
+      stack: error.stack,
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const savePOSCredentials = async (req, res) => {
+  console.log(`[${new Date().toISOString()}] POST /pos-credentials hit`);
+  console.log("Authenticated userId:", req.userId);
+
+  try {
+    const { PosProductionToken, POSID } = req.body;
+    console.log(req.body)
+    console.log("Request body received:", {
+      hasToken: !!PosProductionToken,
+      hasPosId: !!POSID,
+    });
+
+    if (!PosProductionToken || POSID === undefined || POSID === null) {
+      console.warn("PosProductionToken or POSID missing in request");
+
+      return res.status(400).json({
+        success: false,
+        message: "PosProductionToken and POSID are both required",
+      });
+    }
+
+    console.log("Fetching user from DB...");
+
+    const user = await userModel.findById(req.userId);
+
+    if (!user) {
+      console.warn("User not found for ID:", req.userId);
+
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    console.log("User found. Updating POS credentials...");
+
+    user.PosProductionToken = PosProductionToken;
+    user.POSID = POSID;
+
+    await user.save(); // encryption happens in pre-save
+
+    console.log("POS credentials encrypted and saved successfully.");
+
+    return res.status(200).json({
+      success: true,
+      message: "POS credentials saved securely",
+    });
+
+  } catch (error) {
+    console.error("Error saving POS credentials:", {
       message: error.message,
       stack: error.stack,
     });

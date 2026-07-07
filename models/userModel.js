@@ -24,6 +24,8 @@ const userSchema = new mongoose.Schema(
     resetOtpExpiryAt: { type: Number, default: 0 },
     productionApiStatus: { type:Boolean, default:false },
     productionToken: { type:String },
+    POSID: { type:Number },
+    PosProductionToken: { type:String },
     fbrApprovedScenarios: {
       type: [String],      // array of strings
       default: [],
@@ -40,6 +42,14 @@ userSchema.pre("save", function (next) {
     return next();
 
   this.productionToken = encrypt(this.productionToken);
+  next();
+});
+
+userSchema.pre("save", function (next) {
+  if (!this.isModified("PosProductionToken") || !this.PosProductionToken)
+    return next();
+
+  this.PosProductionToken = encrypt(this.PosProductionToken);
   next();
 });
 

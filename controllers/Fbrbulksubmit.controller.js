@@ -255,10 +255,7 @@
 //  }
 //};
 
-import mongoose from "mongoose";
-import SaleModel from "../models/sale.model.js";
-import UserModel from "../models/userModel.js";
-import { submitToFBR } from "../utils/fbr.service.js";
+
 
 //export const bulkSubmitToFBR = async (req, res) => {
 //  try {
@@ -406,7 +403,12 @@ import { submitToFBR } from "../utils/fbr.service.js";
 //    console.error("[FBR bulk] Unexpected controller error:", err);
 //    return res.status(500).json({ message: "Bulk FBR submission failed", error: err.message });
 //  }
-//};
+
+//}
+import mongoose from "mongoose";
+import SaleModel from "../models/sale.model.js";
+import UserModel from "../models/userModel.js";
+import { submitToFBR } from "../utils/fbr.service.js";
 
 export const bulkSubmitToFBR = async (req, res) => {
   try {

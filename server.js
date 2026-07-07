@@ -13,6 +13,7 @@ import branchRouter from "./routes/branch.routes.js"
 //Bulk Routes
 import bulkStockRoutes from "./routes/bulkStock.routes.js";
 import bulkSaleRoutes from "./routes/bulkSale.routes.js";
+import posBulkSaleRoutes from "./routes/posBulkSale.Routes.js";
 
 import authRouter from "./routes/authRoutes.js";
 import userRouter from "./routes/userRoutes.js";
@@ -60,6 +61,7 @@ app.use("/api/branch", branchRouter)
 
 app.use("/api/sale", saleRoutes);
 app.use("/api/sale/bulk", bulkSaleRoutes);
+app.use("/api/pos-sale/bulk", posBulkSaleRoutes);
 
 app.use("/api/report", salesReport);
 

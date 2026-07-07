@@ -1,5 +1,5 @@
 import express from "express";
-import { getUserData, updateUserProfile, updateProfileImage } from "../controllers/userController.js";
+import { getUserData, updateUserProfile, updateProfileImage, savePOSCredentials } from "../controllers/userController.js";
 import { saveProductionToken } from "../controllers/userController.js";
 import userAuth from "../middleware/userAuth.js";
 import upload from "../middleware/multer.js";
@@ -11,4 +11,5 @@ userRouter.put("/updateProfile", userAuth , updateUserProfile)
 userRouter.post("/updateProductionToken", userAuth, saveProductionToken);
 userRouter.post("/updateProfileImage", userAuth ,  upload.single("companyProfile"), updateProfileImage )
 
+userRouter.post("/updatePosProductionToken", userAuth, savePOSCredentials);
 export default userRouter;
