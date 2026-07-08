@@ -43,7 +43,7 @@ const validateRow = (row, index) => {
       errors.push(`Row ${rowNum}: missing "${field}"`);
   }
 
-  const numericFields = ["rate", "qty", "amount", "gstamount", "netamount", "discount", "gstrate", "amountreceived"];
+  const numericFields = ["rate", "qty", "totalamount", "amount", "gstamount", "netamount", "discount", "gstrate", "amountreceived"];
   for (const field of numericFields) {
     if (row[field] !== undefined && row[field] !== "" && isNaN(Number(row[field])))
       errors.push(`Row ${rowNum}: "${field}" must be a number`);
@@ -80,11 +80,23 @@ const toProduct = (r) => ({
   location:        String(r["location"]),
   rate:            Number(r["rate"]),
   qty:             Number(r["qty"]),
-  amount:          Number(r["amount"]),
+  totalAmount:     Number(r["totalamount"] || 0),
+  amount:          Number(r["amount"] || 0),
   gstRate:         Number(r["gstrate"]  || 0),
   gstAmount:       Number(r["gstamount"]),
   discount:        Number(r["discount"] || 0),
   netAmount:       Number(r["netamount"]),
+    fbr: {
+    uoM:                             r["uom"]             ? String(r["uom"])             : "Numbers, pieces, units",
+    fbrSaleType:                     r["fbrsaletype"]      ? String(r["fbrsaletype"])      : "Goods at standard rate (default)",
+    sroScheduleNo:                   r["sroscheduleno"]    ? String(r["sroscheduleno"])    : "",
+    sroItemSerialNo:                 r["sroitemserialno"]  ? String(r["sroitemserialno"])  : "",
+    fixedNotifiedValueOrRetailPrice: Number(r["fixednotifiedvalueorretailprice"] || 0),
+    extraTax:                        Number(r["extratax"]  || 0),
+    furtherTax:                      Number(r["furthertax"] || 0),
+    fedPayable:                      Number(r["fedpayable"] || 0),
+    salesTaxWithheldAtSource:        Number(r["salestaxwithheldatsource"] || 0),
+  },
 });
 
 // ── Group rows by saleDate + customerName → one Sale doc per group ────────────
