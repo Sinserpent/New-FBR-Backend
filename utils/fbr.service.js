@@ -834,6 +834,21 @@ import { uploadQRToCloudinary } from "./Uploadqrtocloudinary.js";
 
 const FBR_URL = "https://gw.fbr.gov.pk/di_data/v1/di/postinvoicedata";
 
+// Map common frontend SRO labels → FBR canonical strings
+function normalizeSroScheduleNo(value) {
+  if (!value) return "";
+  const key = String(value).trim().toLowerCase().replace(/\s+/g, " ");
+  const map = {
+    "6th schedule table i":   "6th Schd Table I",
+    "6th schd table i":       "6th Schd Table I",
+    "6th schedule table ii":  "6th Schd Table II",
+    "6th schd table ii":      "6th Schd Table II",
+    "6th schedule table iii": "6th Schd Table III",
+    "6th schd table iii":     "6th Schd Table III",
+  };
+  return map[key] || String(value).trim();
+}
+
 // ─── Payload builder ──────────────────────────────────────────────────────────
 
 function buildFBRPayload(sale, user) {
@@ -899,10 +914,15 @@ function buildFBRPayload(sale, user) {
     console.log(`[FBR:build] item[${i}] resolvedSaleType:`, resolvedSaleType);
     console.log(`[FBR:build] item[${i}] fbr raw        :`, JSON.stringify(p.fbr));
 
+    const rate =
+      resolvedSaleType === "Exempt goods" && (!p.gstRate || Number(p.gstRate) === 0)
+        ? "Exempt"
+        : `${p.gstRate}%`;
+
     return {
       hsCode:                          p.HSCode,
       productDescription:              p.itemDescription,
-      rate:                            `${p.gstRate}%`,
+      rate,
       uoM:                             p.fbr?.uoM                              || "Numbers, pieces, units",
       quantity:                        parseFloat(p.qty.toFixed(4)),
       totalValues:                     0,
@@ -915,7 +935,7 @@ function buildFBRPayload(sale, user) {
       fedPayable:                      parseFloat((p.fbr?.fedPayable                      || 0).toFixed(2)),
       discount:                        parseFloat((p.discount                             || 0).toFixed(2)),
       saleType:                        resolvedSaleType,
-      sroScheduleNo:                   p.fbr?.sroScheduleNo                    || "",
+      sroScheduleNo:                   normalizeSroScheduleNo(p.fbr?.sroScheduleNo),
       sroItemSerialNo:                 p.fbr?.sroItemSerialNo                  || "",
     };
   });
@@ -1137,4 +1157,4 @@ export async function submitToFBR(sale, user) {
   }
 
   console.log("[FBR] ═══════════════════════════════════════════════\n");
-}
+} 

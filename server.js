@@ -9,6 +9,7 @@ import salesReport from "./routes/report.routes.js";
 import purchaseRoutes from "./routes/purchase.routes.js"
 import stockRoutes from "./routes/stock.routes.js"
 import branchRouter from "./routes/branch.routes.js"
+import buyerRoutes from "./routes/buyer.routes.js"
 
 //Bulk Routes
 import bulkStockRoutes from "./routes/bulkStock.routes.js";
@@ -58,6 +59,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 
 app.use("/api/branch", branchRouter)
+app.use("/api/buyer", buyerRoutes);
 
 app.use("/api/sale", saleRoutes);
 app.use("/api/sale/bulk", bulkSaleRoutes);

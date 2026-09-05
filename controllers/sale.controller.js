@@ -7,7 +7,7 @@ import { submitToFBR } from "../utils/fbr.service.js";
 // ─── Create Sale ──────────────────────────────────────────────────────────────
 
 export const createSale = async (req, res) => {
-  console.log(req.body)
+  console.log(JSON.stringify(req.body, null, 2))
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -114,7 +114,7 @@ export const createSale = async (req, res) => {
         itemIndex,
         currentQuantity: stockItem.quantity,
         minStockLevel:   stockItem.minStockLevel,
-        fbr:             stockItem.fbr,
+        fbr:             { ...stockItem.fbr, ...product.fbr },
       });
     }
 
