@@ -1,4 +1,6 @@
 import express from 'express';
+// import { submitInvoice, FbrError } from '../utils/fbr-sandbox.js';
+// import { validateInvoice, submitInvoice, FbrError } from '../utils/fbr-sandbox.js';
 import { submitInvoice, FbrError } from '../utils/fbr-sandbox.js';
 import user from "../models/userModel.js"
 import userAuth from '../middleware/userAuth.js';
@@ -530,15 +532,15 @@ const ALL_SCENARIOS = {
       buyerRegistrationType : 'Unregistered',
       invoiceRefNo          : '',
       items: [{
-        hsCode                         : '0101.2100',
+        hsCode                         : '2710.1240',
         productDescription             : 'TEST',
-        rate                           : '8%',
-        uoM                            : 'Numbers, pieces, units',
+        rate                           : '18% and Rs. 80 per Liter',
+        uoM                            : 'Liter',
         quantity                       : 1,
-        totalValues                    : 0,
+        totalValues                    : 212.4,
         valueSalesExcludingST          : 100,
         fixedNotifiedValueOrRetailPrice: 0,
-        salesTaxApplicable             : 8,
+        salesTaxApplicable             : 112.4,
         salesTaxWithheldAtSource       : 0,
         extraTax                       : 0,
         furtherTax                     : 0,
@@ -949,7 +951,10 @@ router.post('/run-scenarios', userAuth, async (req, res) => {
     };
 
     try {
+      // Dry-run on validateinvoicedata_sb first (same validation/error codes, no IRN).
+      // Only switch back to postinvoicedata_sb (submitInvoice) once payload is confirmed valid.
       const result    = await submitInvoice(token, invoice);
+      // const result    = await validateInvoice(token, invoice);
       const fbrStatus = result.data?.validationResponse?.statusCode;
       const passed    = fbrStatus === '00';
       const invoiceNo = result.data?.invoiceNumber ?? result.data?.fbrInvoiceNo ?? null;
