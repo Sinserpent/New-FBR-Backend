@@ -168,6 +168,7 @@ export const createSale = async (req, res) => {
       companyName:     p.companyName,
       itemDescription: p.itemDescription,
       location:        p.location,
+      singleUnitPrice: p.singleUnitPrice,   // ← ADD THIS LINE
       totalAmount:            p.totalAmount,
       qty:             p.qty,
       amount:          p.amount,

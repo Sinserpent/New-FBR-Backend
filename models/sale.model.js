@@ -7,9 +7,10 @@ const Product = new mongoose.Schema({
   companyName:     { type: String, trim: true },
   itemDescription: { type: String, trim: true },
   location:        { type: String, trim: true },
-  totalAmount:     { type: Number, required: true },
+  singleUnitPrice: { type: Number, default: 0 }, // NEW: price of ONE piece (excluding sales tax)
+  totalAmount:     { type: Number, required: true }, // singleUnitPrice × qty
   qty:             { type: Number, required: true },
-  amount:          { type: Number, required: true },
+  amount:          { type: Number, required: true }, // singleUnitPrice × qty (value excluding sales tax)
   gstRate:         { type: Number, default: 0 },
   gstAmount:       { type: Number, default: 0 },
   discount:        { type: Number, default: 0 },
