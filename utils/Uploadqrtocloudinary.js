@@ -7,12 +7,12 @@ import cloudinary from "../config/cloudinary.js"; // your existing cloudinary in
  *
  * @param {string} fbrInvoiceNo  — e.g. "3840157889016DIADFBKE992504"
  * @returns {{ fbrQrUrl: string, fbrQrCdnUrl: string }}
- *   fbrQrUrl    → the FBR verification page URL encoded in the QR
+ *   fbrQrUrl    → the raw FBR invoice number encoded in the QR
  *   fbrQrCdnUrl → the Cloudinary CDN URL of the uploaded QR image
  */
 export const uploadQRToCloudinary = async (fbrInvoiceNo) => {
-  // This is what gets encoded inside the QR code
-  const fbrQrUrl = `https://invoice.fbr.gov.pk/${fbrInvoiceNo}`;
+  // Encode only the FBR invoice number (no URL) for Tax Asaan / IRIS scan
+  const fbrQrUrl = String(fbrInvoiceNo);
 
   // Generate QR as a raw PNG buffer
   const qrBuffer = await QRCode.toBuffer(fbrQrUrl, {
@@ -40,7 +40,7 @@ export const uploadQRToCloudinary = async (fbrInvoiceNo) => {
         (err, result) => {
           if (err) return reject(err);
           resolve({
-            fbrQrUrl,                          // encoded URL (FBR verification page)
+            fbrQrUrl,                          // encoded payload: bare FBR invoice number
             fbrQrCdnUrl: result.secure_url,    // Cloudinary CDN URL of the QR image
           });
         }
